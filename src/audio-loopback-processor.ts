@@ -1,4 +1,5 @@
 import {AudioProcessor, IAudioProcessorContext} from "agora-rte-extension";
+import {parse,print} from './sdp-parser.js'
 
 export class AudioLoopbackProcessor extends AudioProcessor {
   public name: string = "AudioLoopbackProcessor";
@@ -71,11 +72,16 @@ export class AudioLoopbackProcessor extends AudioProcessor {
           this.loopbackSendPC.addTrack(track);
 
           const pcOffer = await this.loopbackSendPC.createOffer();
-          await this.loopbackSendPC.setLocalDescription(pcOffer);
-          await this.loopbackRecvPC.setRemoteDescription(pcOffer);
+          const offerSDP = this.applyStereoInSDP(pcOffer.sdp!);
+
+          await this.loopbackSendPC.setLocalDescription({type:'offer',sdp:offerSDP});
+          await this.loopbackRecvPC.setRemoteDescription({type:'offer',sdp:offerSDP});
+
           const loopbackAnswer = await this.loopbackRecvPC.createAnswer();
-          await this.loopbackRecvPC.setLocalDescription(loopbackAnswer);
-          await this.loopbackSendPC.setRemoteDescription(loopbackAnswer);
+          const answerSDP = this.applyStereoInSDP(loopbackAnswer.sdp!);
+
+          await this.loopbackRecvPC.setLocalDescription({type:'answer',sdp:answerSDP});
+          await this.loopbackSendPC.setRemoteDescription({type:'answer',sdp:answerSDP});
         } catch (e) {
           reject(e);
         }
@@ -83,6 +89,32 @@ export class AudioLoopbackProcessor extends AudioProcessor {
 
       return this.loopbackPromise;
     }
+  }
+
+  private applyStereoInSDP(sdp:string):string {
+    const sessionDesc = parse(sdp);
+
+    sessionDesc.mediaDescriptions.forEach(mediaDesc=>{
+      if (mediaDesc.media.mediaType !== "audio") {
+        return;
+      }
+
+      const opusPayloads = mediaDesc.attributes.payloads.filter(
+        (payload) => payload.rtpMap?.encodingName.toLowerCase() === "opus"
+      );
+
+      opusPayloads.forEach((payload) => {
+        if (!payload.fmtp) {
+          payload.fmtp = { parameters: {} };
+        }
+
+        payload.fmtp.parameters["stereo"] = "1";
+        payload.fmtp.parameters["sprop-stereo"] = "1";
+      });
+
+    });
+
+    return print(sessionDesc);
   }
 
   protected onUnpiped(): void {

@@ -1,6 +1,6 @@
 {
   "name": "audio-loopback-extension",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "An agora Web SDK extension which loops back audio through WebRTC PeerConnection to workaround Chrome echo issues",
   "repository": "https://github.com/VicNing/audio-loopback-extension",
   "main": "dist/audio-loopback-extension.js",
